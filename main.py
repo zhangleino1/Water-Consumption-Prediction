@@ -12,6 +12,16 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+import matplotlib
+
+
+# 指定默认字体
+matplotlib.rcParams['font.sans-serif'] = ['SimSun'] 
+matplotlib.rcParams['font.family']='sans-serif'
+# 解决负号'-'显示为方块的问题
+matplotlib.rcParams['axes.unicode_minus'] = False 
+
+
 
 def load_callbacks():
     callbacks = []
@@ -360,7 +370,7 @@ if __name__ == '__main__':
 
     # 省份特定参数
     parser.add_argument('--province_id', type=int, help='要训练/预测的省份ID')
-    parser.add_argument('--predict_years', type=str, help='预测水资源消耗的年份，以逗号分隔（例如："2024,2025,2026"）')
+    parser.add_argument('--predict_years', type=str, help='预测水资源消耗的年份，以逗号分隔（例如："2024,2025,2026"）',default="2024,2025,2026")
 
     # 重启控制参数
     parser.add_argument('--load_best', action='store_true', help='加载最佳模型')
@@ -369,8 +379,8 @@ if __name__ == '__main__':
     parser.add_argument('--load_v_num', default=None, type=int, help='加载模型的版本号')
 
     # 额外选项
-    parser.add_argument('--mode', choices=['train', 'test', 'list_provinces'], type=str, default='train', help='操作模式')
-    parser.add_argument('--cpt_path', default=None, type=str, help='用于测试或恢复训练的检查点路径')
+    parser.add_argument('--mode', choices=['train', 'test', 'list_provinces'], type=str, default='test', help='操作模式')
+    parser.add_argument('--cpt_path', default=os.getcwd()+'/logs/water_consumption_lstm/version_0/checkpoints/water-consumption-best-epoch=04-val_loss=0.015.ckpt', type=str, help='用于测试或恢复训练的检查点路径')
 
     args = parser.parse_args()
 

@@ -25,6 +25,7 @@ class TimeSeriesDataset(Dataset):
         # 标准化器需要可访问以便后续可能的逆变换
         self.scalers = {} # 为每个省份存储标准化器
         self.data = self._load_and_preprocess_data(data_dir)
+        print(self.data)
         self.sequences = self._create_sequences()
         
         # 存储省份名称以了解数据集中包含哪些省份
@@ -34,79 +35,47 @@ class TimeSeriesDataset(Dataset):
         # 如果存在合并后的CSV文件则直接加载
         csv_path = os.path.join(data_dir, 'merged_water_data.csv')
         
-        if os.path.exists(csv_path):
-            try:
-                # 加载合并的CSV文件
-                df_merged = pd.read_csv(csv_path)
-                print(f"从 {csv_path} 加载了合并数据")
-            except Exception as e:
-                raise RuntimeError(f"加载合并CSV文件时出错: {e}")
-        else:
-            # 回退到处理单独的文件
-            water_data_path = os.path.join(data_dir, '15-分省水资源供水和用水数据.xls')
-            prec_data_path = os.path.join(data_dir, '省逐年降水.xlsx')
-            temp_data_path = os.path.join(data_dir, '省逐年平均气温.xlsx')
+        
+        try:
+            # 加载合并的CSV文件
+            df_merged = pd.read_csv(csv_path)
+            print(f"从 {csv_path} 加载了合并数据")
+        except Exception as e:
+            raise RuntimeError(f"加载合并CSV文件时出错: {e}")
+      
 
-            try:
-                # 加载水资源供水和消耗数据 (.xls)
-                df_water = pd.read_excel(water_data_path, engine='xlrd', sheet_name=0, header=2)
-                df_water = df_water.rename(columns={'地区': 'province', '年份': 'year', '供水总量': 'supply', '用水总量': 'consumption'})
-                df_water = df_water[['province', 'year', 'supply', 'consumption']]
-
-                # 加载降水数据 (.xlsx)
-                df_prec = pd.read_excel(prec_data_path, sheet_name=0, header=0)
-                df_prec = df_prec.rename(columns={'省份': 'province', '年份': 'year', '降水量': 'precipitation'})
-                df_prec = df_prec[['province', 'year', 'precipitation']]
-
-                # 加载温度数据 (.xlsx)
-                df_temp = pd.read_excel(temp_data_path, sheet_name=0, header=0)
-                df_temp = df_temp.rename(columns={'省份': 'province', '年份': 'year', '平均气温': 'temperature'})
-                df_temp = df_temp[['province', 'year', 'temperature']]
-
-                # --- 数据清洗 ---
-                # 标准化省份名称(移除后缀)
-                def clean_province(name):
-                    if isinstance(name, str):
-                        return name.replace('省', '').replace('市', '').replace('自治区', '').replace('壮族', '').replace('回族', '').replace('维吾尔', '')
-                    return name
-
-                df_water['province'] = df_water['province'].apply(clean_province)
-                df_prec['province'] = df_prec['province'].apply(clean_province)
-                df_temp['province'] = df_temp['province'].apply(clean_province)
-
-                # 将年份转换为数值类型，强制转换错误
-                df_water['year'] = pd.to_numeric(df_water['year'], errors='coerce')
-                df_prec['year'] = pd.to_numeric(df_prec['year'], errors='coerce')
-                df_temp['year'] = pd.to_numeric(df_temp['year'], errors='coerce')
-
-                # 删除无效年份的行
-                df_water.dropna(subset=['year'], inplace=True)
-                df_prec.dropna(subset=['year'], inplace=True)
-                df_temp.dropna(subset=['year'], inplace=True)
-
-                # 将年份转换为整数
-                df_water['year'] = df_water['year'].astype(int)
-                df_prec['year'] = df_prec['year'].astype(int)
-                df_temp['year'] = df_temp['year'].astype(int)
-
-                # --- 合并数据框 ---
-                df_merged = pd.merge(df_water, df_prec, on=['province', 'year'], how='inner')
-                df_merged = pd.merge(df_merged, df_temp, on=['province', 'year'], how='inner')
-
-            except FileNotFoundError as e:
-                raise FileNotFoundError(f"加载数据集文件时出错: {e}。确保文件存在于 {data_dir}")
-            except Exception as e:
-                raise RuntimeError(f"处理Excel文件时出错: {e}。检查文件结构、工作表名称和列名。")
-
+        # 如果province_id为None，则按年份聚合所有省份的数据
+        if self.province_id is None:
+            # 创建全国的数据
+            print("未指定省份ID，将创建全国汇总数据")
+            
+            # 确保数值类型列已正确转换
+            for col in self.features + [self.target]:
+                if col in df_merged.columns:
+                    df_merged[col] = pd.to_numeric(df_merged[col], errors='coerce')
+            
+            # 按年份分组并聚合数据
+            national_data = df_merged.groupby('year').agg({
+                'supply': 'sum',
+                'consumption': 'sum',
+                # 对温度和降水量取平均值
+                'precipitation': 'mean',
+                'temperature': 'mean'
+            }).reset_index()
+            
+            # 添加"全国"标识
+            national_data['province'] = '全国'
+            national_data['province_id'] = 0  # 使用0作为全国的ID
+            
+            df_merged = national_data
         # 如果提供了province_id则进行过滤
-        if self.province_id is not None:
-            if 'province_id' in df_merged.columns:
-                df_merged = df_merged[df_merged['province_id'] == self.province_id]
-                print(f"已为省份ID过滤数据: {self.province_id}")
-                if len(df_merged) == 0:
-                    raise ValueError(f"未找到省份ID {self.province_id} 的数据")
-            else:
-                print(f"警告: 在数据中未找到'province_id'列，无法按省份ID {self.province_id} 进行过滤")
+        elif 'province_id' in df_merged.columns:
+            df_merged = df_merged[df_merged['province_id'] == self.province_id]
+            print(f"已为省份ID过滤数据: {self.province_id}")
+            if len(df_merged) == 0:
+                raise ValueError(f"未找到省份ID {self.province_id} 的数据")
+        else:
+            print(f"警告: 在数据中未找到'province_id'列，无法按省份ID {self.province_id} 进行过滤")
 
         # 将特征和目标转换为数值类型，强制转换错误
         for col in self.features + [self.target]:
@@ -131,14 +100,18 @@ class TimeSeriesDataset(Dataset):
         processed_data = {}
         all_cols_to_scale = self.features + [self.target]
         
-        # 处理特定省份ID的情况
-        if self.province_id is not None:
+        # 处理特定省份ID或全国数据的情况
+        if self.province_id is not None or 'province' in df_merged.columns:
             provinces_to_process = df_merged['province'].unique()
         else:
-            provinces_to_process = df_merged['province'].unique()
+            provinces_to_process = ['全国']  # 默认使用全国作为省份名称
             
         for province in provinces_to_process:
-            group = df_merged[df_merged['province'] == province]
+            if province == '全国':
+                group = df_merged  # 全国数据已经聚合好了
+            else:
+                group = df_merged[df_merged['province'] == province]
+                
             # 确保组足够大以进行标准化和序列创建
             if len(group) > self.sequence_length:
                 scaler = MinMaxScaler()
@@ -241,45 +214,57 @@ class TimeSeriesDataModule(pl.LightningDataModule):
 
             if total_size == 0:
                  raise ValueError("处理后数据集为空。检查数据文件和预处理步骤。")
-
-            train_size = int(self.train_val_test_split[0] * total_size)
-            val_size = int(self.train_val_test_split[1] * total_size)
-            # 确保测试集大小至少为0
-            test_size = max(0, total_size - train_size - val_size)
-
-            # 如果由于四舍五入或小数据集导致总和超过total_size，则调整train_size
-            if train_size + val_size + test_size > total_size:
-                 train_size = total_size - val_size - test_size
-
-            # 确保大小非负
-            train_size = max(0, train_size)
-            val_size = max(0, val_size)
-
-            # 处理数据集太小无法拆分的情况
-            if train_size == 0 or val_size == 0 or test_size == 0:
-                print(f"警告: 数据集大小 ({total_size}) 对于请求的拆分 ({self.train_val_test_split}) 太小。调整拆分大小。")
-                # 简单调整示例：主要分配给训练集，如果可能的话，验证/测试集各1个
-                if total_size > 2:
-                    val_size = 1
-                    test_size = 1
-                    train_size = total_size - 2
-                elif total_size == 2:
-                    val_size = 1
-                    test_size = 0
-                    train_size = 1
-                else: # total_size == 1
-                    val_size = 0
-                    test_size = 0
-                    train_size = 1
-                print(f"调整后的大小: 训练={train_size}, 验证={val_size}, 测试={test_size}")
-
-
-            self.train_dataset, self.val_dataset, self.test_dataset = random_split(
-                self.full_dataset, [train_size, val_size, test_size]
-            )
             
-            print(f"已加载数据集，共 {total_size} 个样本")
-            print(f"训练: {train_size}, 验证: {val_size}, 测试: {test_size}")
+            # 提取所有序列的元数据
+            sequences_with_metadata = [(idx, self.full_dataset.get_metadata(idx)['year']) 
+                                      for idx in range(total_size)]
+            
+            # 按年份排序索引
+            sorted_indices = [idx for idx, _ in sorted(sequences_with_metadata, key=lambda x: x[1])]
+            
+            # 计算用于拆分的年份
+            years = [self.full_dataset.get_metadata(idx)['year'] for idx in sorted_indices]
+            min_year = min(years)
+            max_year = max(years)
+            
+            # 使用所有可用年份的数据
+            # 计算年份拆分点: 70% 训练, 15% 验证, 15% 测试
+            train_end_year = min_year + int((max_year - min_year) * 0.7)
+            val_end_year = train_end_year + int((max_year - min_year) * 0.15)
+            
+            # 根据年份范围拆分数据
+            train_indices = [idx for idx in sorted_indices 
+                            if self.full_dataset.get_metadata(idx)['year'] <= train_end_year]
+            val_indices = [idx for idx in sorted_indices 
+                          if self.full_dataset.get_metadata(idx)['year'] > train_end_year 
+                          and self.full_dataset.get_metadata(idx)['year'] <= val_end_year]
+            test_indices = [idx for idx in sorted_indices 
+                           if self.full_dataset.get_metadata(idx)['year'] > val_end_year]
+            
+            # 创建拆分的数据集子集
+            from torch.utils.data import Subset
+            self.train_dataset = Subset(self.full_dataset, train_indices)
+            self.val_dataset = Subset(self.full_dataset, val_indices)
+            self.test_dataset = Subset(self.full_dataset, test_indices)
+            
+            print(f"已按年份顺序加载数据集，共 {total_size} 个样本")
+            print(f"训练: {len(self.train_dataset)} ({int(len(self.train_dataset)/total_size*100)}%), " 
+                  f"验证: {len(self.val_dataset)} ({int(len(self.val_dataset)/total_size*100)}%), "
+                  f"测试: {len(self.test_dataset)} ({int(len(self.test_dataset)/total_size*100)}%)")
+            
+            # 显示每个子集的年份范围
+            if len(train_indices) > 0:
+                train_years = [self.full_dataset.get_metadata(idx)['year'] for idx in train_indices]
+                print(f"训练集年份范围: {min(train_years)} - {max(train_years)}")
+            
+            if len(val_indices) > 0:
+                val_years = [self.full_dataset.get_metadata(idx)['year'] for idx in val_indices]
+                print(f"验证集年份范围: {min(val_years)} - {max(val_years)}")
+            
+            if len(test_indices) > 0:
+                test_years = [self.full_dataset.get_metadata(idx)['year'] for idx in test_indices]
+                print(f"测试集年份范围: {min(test_years)} - {max(test_years)}")
+                
             if self.province_id:
                 print(f"正在使用省份ID: {self.province_id}")
 

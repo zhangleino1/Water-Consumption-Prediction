@@ -245,13 +245,21 @@ class CNN_LSTM_Net(pl.LightningModule):
                 
                 # 保存图表
                 log_dir = self.logger.log_dir if hasattr(self.logger, 'log_dir') else '.'
-                plt.savefig(os.path.join(log_dir, 'test_predictions_vs_actuals.png'))
+                plt.savefig(os.path.join(os.getcwd(), 'results/test_predictions_vs_actuals.png'))
                 plt.close()
                 
                 # 如果元数据可用，创建时间序列图
                 if self.test_metadata and len(self.test_metadata) == len(all_preds):
-                    # 获取年份（如果可用）
-                    years = [item.get('year', i) for i, item in enumerate(self.test_metadata)]
+                    # 获取年份（如果可用）并确保它们是整数
+                    years = []
+                    for i, item in enumerate(self.test_metadata):
+                        year = item.get('year', i)
+                        # 确保年份是整数
+                        if isinstance(year, (int, float)):
+                            years.append(int(year))
+                        else:
+                            years.append(i)
+                    
                     province = self.test_metadata[0].get('province', 'Unknown')
                     
                     # 绘制时间序列
@@ -264,8 +272,11 @@ class CNN_LSTM_Net(pl.LightningModule):
                     plt.legend()
                     plt.grid(True)
                     
+                    # 使用整数刻度
+                    plt.xticks(years)
+                    
                     # 保存时间序列图
-                    plt.savefig(os.path.join(log_dir, f'province_{province}_time_series.png'))
+                    plt.savefig(os.path.join(os.getcwd(), f'results/province_{province}_time_series.png'))
                     plt.close()
                     
             except Exception as e:
