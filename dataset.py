@@ -98,7 +98,7 @@ class TimeSeriesDataset(Dataset):
         
         # --- 标准化(按省份) ---
         processed_data = {}
-        all_cols_to_scale = self.features + [self.target]
+        feature_cols_to_scale = self.features  # 只标准化特征列，不标准化目标列
         
         # 处理特定省份ID或全国数据的情况
         if self.province_id is not None or 'province' in df_merged.columns:
@@ -115,8 +115,8 @@ class TimeSeriesDataset(Dataset):
             # 确保组足够大以进行标准化和序列创建
             if len(group) > self.sequence_length:
                 scaler = MinMaxScaler()
-                # 仅对数值特征/目标列进行标准化
-                cols_to_scale_in_group = [col for col in all_cols_to_scale if col in group.columns]
+                # 仅对特征列进行标准化，不标准化目标列
+                cols_to_scale_in_group = [col for col in feature_cols_to_scale if col in group.columns]
                 if cols_to_scale_in_group:
                     group_scaled = group.copy()
                     group_scaled[cols_to_scale_in_group] = scaler.fit_transform(group[cols_to_scale_in_group])
@@ -143,14 +143,17 @@ class TimeSeriesDataset(Dataset):
                 print(f"警告: 未找到省份 {province} 的目标列 '{self.target}'")
                 continue
             
-            data_values = df_province[feature_cols + [self.target]].values
-            num_samples = len(data_values)
+            # 获取特征和目标数据
+            feature_values = df_province[feature_cols].values
+            target_values = df_province[self.target].values
+            num_samples = len(feature_values)
             province_id = df_province['province_id'].iloc[0] if 'province_id' in df_province.columns else None
             
             if num_samples > self.sequence_length:
                 for i in range(num_samples - self.sequence_length):
-                    seq = data_values[i:i + self.sequence_length, :-1]  # 特征
-                    label = data_values[i + self.sequence_length, -1]   # 目标
+                    # 只使用特征列创建序列，目标值保持原样
+                    seq = feature_values[i:i + self.sequence_length]  # 特征序列
+                    label = target_values[i + self.sequence_length]   # 未缩放的目标值
                     
                     # 包含元数据以便追踪
                     metadata = {
@@ -192,7 +195,7 @@ class TimeSeriesDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.train_val_test_split = train_val_test_split
         self.province_id = province_id
-        self.features = ['precipitation', 'temperature', 'year', 'supply'] # 输入特征更新为包含年份
+        self.features = ['precipitation', 'temperature', 'year'] # 输入特征更新为包含年份
         self.target = 'consumption' # 目标变量
         # 为数据集添加占位符
         self.train_dataset = None
@@ -304,8 +307,5 @@ class TimeSeriesDataModule(pl.LightningDataModule):
     def get_province_names(self):
         """从数据集返回省份名称列表"""
         if self.full_dataset:
-            return self.full_dataset.get_province_names()
-        else:
-            self.setup()
             return self.full_dataset.get_province_names()
 

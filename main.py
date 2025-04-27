@@ -348,7 +348,7 @@ if __name__ == '__main__':
     parser.add_argument('--accelerator', default="gpu", type=str, help='训练加速器类型（gpu 或 cpu）')
     parser.add_argument('--devices', default=1, type=int, help='使用的设备数量')
     parser.add_argument('--min_epochs', default=50, type=int, help='最小训练轮数')
-    parser.add_argument('--max_epochs', default=200, type=int, help='最大训练轮数')
+    parser.add_argument('--max_epochs', default=9000, type=int, help='最大训练轮数')
     parser.add_argument('--fast_dev_run', default=False, type=bool, help='快速开发运行模式，用于调试')
 
     # 学习率调度器参数
@@ -361,7 +361,7 @@ if __name__ == '__main__':
     parser.add_argument('--sequence_length', default=5, type=int, help='LSTM输入序列长度')
 
     # LSTM模型参数 (CNN_LSTM_Net)
-    parser.add_argument('--input_size', default=4, type=int, help='输入特征数量（降水量、温度、标准化年份、供水量）')
+    parser.add_argument('--input_size', default=3, type=int, help='输入特征数量（降水量、温度、标准化年份、供水量）')
     parser.add_argument('--hidden_size', default=64, type=int, help='LSTM隐藏单元数量')
     parser.add_argument('--num_layers', default=2, type=int, help='LSTM层数')
     parser.add_argument('--output_size', default=1, type=int, help='输出值数量（预测的消耗量）')
@@ -369,7 +369,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_attention', default=True, type=bool, help='是否使用注意力机制')
 
     # 省份特定参数
-    parser.add_argument('--province_id', type=int, help='要训练/预测的省份ID')
+    parser.add_argument('--province_id', type=int, help='要训练/预测的省份ID', default=410000)
     parser.add_argument('--predict_years', type=str, help='预测水资源消耗的年份，以逗号分隔（例如："2024,2025,2026"）',default="2024,2025,2026")
 
     # 重启控制参数
@@ -379,7 +379,7 @@ if __name__ == '__main__':
     parser.add_argument('--load_v_num', default=None, type=int, help='加载模型的版本号')
 
     # 额外选项
-    parser.add_argument('--mode', choices=['train', 'test', 'list_provinces'], type=str, default='test', help='操作模式')
+    parser.add_argument('--mode', choices=['train', 'test', 'list_provinces'], type=str, default='train', help='操作模式')
     parser.add_argument('--cpt_path', default=os.getcwd()+'/logs/water_consumption_lstm/version_0/checkpoints/water-consumption-best-epoch=04-val_loss=0.015.ckpt', type=str, help='用于测试或恢复训练的检查点路径')
 
     args = parser.parse_args()
