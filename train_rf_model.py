@@ -1,5 +1,5 @@
 """
-训练并保存SVM模型用于水资源消耗预测API服务
+训练并保存随机森林(RF)模型用于水资源消耗预测API服务
 """
 
 import os
@@ -7,13 +7,13 @@ import argparse
 from ml_prediction_models import MLWaterConsumptionPredictor
 from dataset import TimeSeriesDataModule
 
-def train_svm_model(data_path="dataset", 
-                     output_dir="ml_predictions", 
-                     model_path=None, 
-                     tune_hyperparameters=False,
-                     province_id=None):
+def train_rf_model(data_path="dataset", 
+                   output_dir="ml_predictions", 
+                   model_path=None, 
+                   tune_hyperparameters=False,
+                   province_id=None):
     """
-    训练SVM模型并保存
+    训练随机森林(RF)模型并保存
     
     参数:
         data_path: 数据文件路径
@@ -28,11 +28,11 @@ def train_svm_model(data_path="dataset",
     # 如果未指定模型路径，则使用默认路径
     if model_path is None:
         if province_id is not None:
-            model_path = os.path.join(output_dir, f"svm_model_province_{province_id}.joblib")
+            model_path = os.path.join(output_dir, f"rf_model_province_{province_id}.joblib")
         else:
-            model_path = os.path.join(output_dir, "svm_model.joblib")
+            model_path = os.path.join(output_dir, "rf_model.joblib")
     
-    print(f"将在 {model_path} 保存SVM模型")
+    print(f"将在 {model_path} 保存随机森林(RF)模型")
     
     # 创建数据模块
     data_module = TimeSeriesDataModule(
@@ -43,9 +43,9 @@ def train_svm_model(data_path="dataset",
         province_id=province_id
     )
     
-    # 创建SVM预测器
+    # 创建随机森林预测器
     predictor = MLWaterConsumptionPredictor(
-        model_type='svm',
+        model_type='rf',  # 修改为随机森林模型
         sequence_length=5,
         output_dir=output_dir
     )
@@ -54,7 +54,7 @@ def train_svm_model(data_path="dataset",
     # 准备数据
     X_train, X_val, X_test, y_train, y_val, y_test = predictor.prepare_data(data_module)
     
-    print("训练SVM模型...")
+    print("训练随机森林(RF)模型...")
     # 训练模型
     train_results = predictor.train(
         X_train, y_train, X_val, y_val,
@@ -90,13 +90,13 @@ def train_svm_model(data_path="dataset",
     }
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="训练SVM模型用于水资源消耗预测API服务")
+    parser = argparse.ArgumentParser(description="训练随机森林(RF)模型用于水资源消耗预测API服务")
     parser.add_argument('--data_path', type=str, default='dataset',
                       help='数据文件路径')
     parser.add_argument('--output_dir', type=str, default='ml_predictions',
                       help='输出目录')
     parser.add_argument('--model_path', type=str, default=None,
-                      help='模型保存路径 (默认为 output_dir/svm_model.joblib)')
+                      help='模型保存路径 (默认为 output_dir/rf_model.joblib)')
     parser.add_argument('--tune_hyperparameters', action='store_true',
                       help='是否调优超参数')
     parser.add_argument('--province_id', type=int, default=370000,
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    train_svm_model(
+    train_rf_model(
         data_path=args.data_path,
         output_dir=args.output_dir,
         model_path=args.model_path,

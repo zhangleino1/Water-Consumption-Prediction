@@ -287,6 +287,7 @@ class MLWaterConsumptionPredictor:
         if self.model is None:
             raise ValueError("模型尚未训练。请先调用 train() 方法。")
         
+        # 如果没有提供路径，使用基于模型类型的默认路径
         if path is None:
             path = os.path.join(self.output_dir, f'{self.model_type}_model.joblib')
         
@@ -298,6 +299,9 @@ class MLWaterConsumptionPredictor:
             'model_type': self.model_type,
             'sequence_length': self.sequence_length
         }
+        
+        # 确保输出目录存在
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         
         joblib.dump(model_data, path)
         print(f"模型已保存到 {path}")
@@ -505,8 +509,8 @@ def train_model(args):
     )
     
     # 测试模型
+    province_name = None
     if len(X_test) > 0:
-        province_name = None
         if args.province_id is not None:
             # 尝试获取省份名称
             if data_module.full_dataset:
@@ -517,12 +521,22 @@ def train_model(args):
         
         test_results = predictor.test(
             X_test, y_test,
-            province_name=province_name,
+            province_name=province_name or args.province_name,
             province_id=args.province_id
         )
     
+    # 根据省份ID生成模型保存路径，确保不同省份的模型不会互相覆盖
+    if args.province_id is not None:
+        # 构建包含省份ID的模型文件名
+        model_filename = f"{args.model_type}_province_{args.province_id}_model.joblib"
+        model_path = os.path.join(args.output_dir, model_filename)
+    else:
+        # 如果没有指定省份ID，则使用通用模型名称（用于全国模型）
+        model_path = args.model_path
+    
     # 保存模型
-    predictor.save_model(args.model_path)
+    predictor.save_model(model_path)
+    print(f"已保存模型到: {model_path}")
     
     # 如果指定了预测年份，则进行未来预测
     if args.predict_years and (args.province_id is not None or args.province_name is not None):
@@ -530,7 +544,7 @@ def train_model(args):
             data_module=data_module,
             years=args.predict_years,
             province_id=args.province_id,
-            province_name=args.province_name
+            province_name=args.province_name or province_name
         )
 
 
